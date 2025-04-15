@@ -30,10 +30,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/claxman/ciaraai-email-parser.git"
+    "url": "git+https://github.com/claxman/CiaraAI-Email-Parser.git"
   },
   "bugs": {
-    "url": "https://github.com/claxman/ciaraai-email-parser/issues"
+    "url": "https://github.com/claxman/CiaraAI-Email-Parser/issues"
   },
-  "homepage": "https://github.com/claxman/ciaraai-email-parser#readme"
+  "homepage": "https://github.com/claxman/CiaraAI-Email-Parser#readme"
 }

@@ -37,8 +37,8 @@ A robust, flexible Node.js utility for parsing virtually any email format and ex
 
 ```bash
 # Clone the repository
-git clone https://github.com/claxman/ciaraai-email-parser.git
-cd ciaraai-email-parser
+git clone https://github.com/claxman/CiaraAI-Email-Parser.git
+cd CiaraAI-Email-Parser
 
 # Install dependencies
 npm install
