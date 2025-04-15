@@ -1,0 +1,39 @@
+{
+  "name": "ciaraai-email-parser",
+  "version": "1.0.0",
+  "description": "A robust, flexible Node.js utility for parsing virtually any email format from CiaraAI",
+  "main": "email-parser.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "ciaraai",
+    "email",
+    "parser",
+    "gmail",
+    "outlook",
+    "attachments",
+    "mime"
+  ],
+  "author": "CiaraAI (Chaitanya Laxman)",
+  "license": "MIT",
+  "dependencies": {
+    "cheerio": "^1.0.0-rc.12",
+    "iconv-lite": "^0.6.3",
+    "mailparser": "^3.6.5"
+  },
+  "optionalDependencies": {
+    "msg-parser": "^1.2.0"
+  },
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/claxman/ciaraai-email-parser.git"
+  },
+  "bugs": {
+    "url": "https://github.com/claxman/ciaraai-email-parser/issues"
+  },
+  "homepage": "https://github.com/claxman/ciaraai-email-parser#readme"
+}
