@@ -10,20 +10,35 @@
  * - Already parsed JSON
  */
 
-const fs = require('fs');
-const path = require('path');
-const { simpleParser } = require('mailparser');
-const cheerio = require('cheerio');
-const iconv = require('iconv-lite'); // Optional for character encoding
+import * as fs from 'fs';
+import * as path from 'path';
+// @ts-ignore - To ignore type issues with mailparser
+import { simpleParser } from 'mailparser';
+import * as cheerio from 'cheerio';
+import * as iconv from 'iconv-lite'; // Optional for character encoding
+
+import {
+  EmailParserOptions,
+  EmailData,
+  BodyContent,
+  GmailApiMessage,
+  ParsedEmail,
+  Attachment,
+  Recipient,
+  SubjectInfo
+} from './types';
 
 /**
  * Main function to handle any email format
- * @param {string|Buffer|Object} input - File path, raw content, or parsed object
- * @param {Object} options - Processing options
- * @returns {Promise<Object>} Parsed email data
+ * @param input - File path, raw content, or parsed object
+ * @param options - Processing options
+ * @returns Parsed email data
  */
-async function parseAnyEmail(input, options = {}) {
-  const opts = {
+async function parseAnyEmail(
+  input: string | Buffer | object,
+  options: EmailParserOptions = {}
+): Promise<EmailData> {
+  const opts: EmailParserOptions = {
     debug: false,
     outputPath: null,
     includeAttachmentContent: false,
@@ -31,7 +46,7 @@ async function parseAnyEmail(input, options = {}) {
     ...options
   };
   
-  const log = (...args) => {
+  const log = (...args: any[]): void => {
     if (opts.debug) console.log(...args);
   };
   
@@ -39,7 +54,7 @@ async function parseAnyEmail(input, options = {}) {
   
   try {
     // STEP 1: Handle different input types
-    let rawContent;
+    let rawContent: any;
     let inputType = 'unknown';
     
     if (typeof input === 'string') {
@@ -65,7 +80,7 @@ async function parseAnyEmail(input, options = {}) {
             rawContent = JSON.parse(content);
             log('Successfully parsed JSON file');
           } catch (e) {
-            log('Error parsing JSON file:', e.message);
+            log('Error parsing JSON file:', (e as Error).message);
             // Continue with raw content
           }
         }
@@ -81,7 +96,7 @@ async function parseAnyEmail(input, options = {}) {
             rawContent = JSON.parse(input);
             log('Successfully parsed JSON string');
           } catch (e) {
-            log('Error parsing JSON string:', e.message);
+            log('Error parsing JSON string:', (e as Error).message);
             // Continue with raw content
           }
         }
@@ -102,7 +117,7 @@ async function parseAnyEmail(input, options = {}) {
           log('Successfully parsed buffer as JSON');
         }
       } catch (e) {
-        log('Error parsing buffer as JSON:', e.message);
+        log('Error parsing buffer as JSON:', (e as Error).message);
         // Continue with buffer content
       }
     } else if (input && typeof input === 'object') {
@@ -123,13 +138,13 @@ async function parseAnyEmail(input, options = {}) {
     }
     
     // STEP 2: Special format detection & handling
-    let emailData;
+    let emailData: EmailData | undefined;
     
     // Handle JSON format (Gmail API, etc.)
     if (inputType === 'json' || (typeof rawContent === 'object' && rawContent !== null)) {
       log('Processing as JSON...');
       
-      const jsonData = rawContent;
+      const jsonData = rawContent as any;
 
       // Debug log the JSON structure
       if (opts.debug) {
@@ -144,7 +159,7 @@ async function parseAnyEmail(input, options = {}) {
           const decoded = Buffer.from(jsonData.raw, 'base64').toString();
           emailData = await parseStandardEmail(decoded, opts);
         } catch (e) {
-          log('Error decoding Gmail API raw format:', e.message);
+          log('Error decoding Gmail API raw format:', (e as Error).message);
         }
       } 
       // Check for Gmail API message format with payload
@@ -187,7 +202,7 @@ async function parseAnyEmail(input, options = {}) {
         try {
           emailData = await parseMsgFormat(rawContent, opts);
         } catch (e) {
-          log('MSG parsing failed, falling back to standard parser:', e.message);
+          log('MSG parsing failed, falling back to standard parser:', (e as Error).message);
         }
       }
       
@@ -201,7 +216,7 @@ async function parseAnyEmail(input, options = {}) {
             emailData = await parseStandardEmail(firstEmail, opts);
           }
         } catch (e) {
-          log('MBOX parsing failed, falling back to standard parser:', e.message);
+          log('MBOX parsing failed, falling back to standard parser:', (e as Error).message);
         }
       }
       
@@ -224,7 +239,7 @@ async function parseAnyEmail(input, options = {}) {
     
     // Create minimal fallback object for graceful failure
     return {
-      error: error.message,
+      error: (error as Error).message,
       id: `error-${Date.now()}`,
       subject: 'Error parsing email',
       from: { name: '', email: '' },
@@ -240,8 +255,8 @@ async function parseAnyEmail(input, options = {}) {
 /**
  * Parse standard email formats using mailparser
  */
-async function parseStandardEmail(content, opts) {
-  const log = (...args) => {
+async function parseStandardEmail(content: string | Buffer, opts: EmailParserOptions): Promise<EmailData> {
+  const log = (...args: any[]): void => {
     if (opts.debug) console.log(...args);
   };
 
@@ -257,7 +272,7 @@ async function parseStandardEmail(content, opts) {
           log('Successfully decoded Base64 content');
         }
       } catch (e) {
-        log('Failed to parse JSON or decode Base64:', e.message);
+        log('Failed to parse JSON or decode Base64:', (e as Error).message);
       }
     }
 
@@ -272,7 +287,7 @@ async function parseStandardEmail(content, opts) {
     }
     
     // Detect and handle character encoding issues
-    let processedContent = content;
+    let processedContent: string | Buffer = content;
     if (Buffer.isBuffer(content)) {
       // Try to detect encoding
       const encoding = detectEncoding(content);
@@ -312,7 +327,7 @@ async function parseStandardEmail(content, opts) {
     const bodyContent = extractBody(parsed);
     
     // Extract key data from parsed email
-    const emailData = {
+    const emailData: EmailData = {
       id: parsed.messageId || `email-${Date.now()}`,
       from: extractSender(parsed.from),
       to: extractRecipients(parsed.to),
@@ -321,7 +336,7 @@ async function parseStandardEmail(content, opts) {
       replyTo: extractRecipients(parsed.replyTo),
       subject: parsed.subject || '(No Subject)',
       subjectInfo: extractSubjectInfo(parsed.subject),
-      date: parsed.date,
+      date: parsed.date || new Date(),
       body: bodyContent.text,
       bodyHtml: bodyContent.html,  // Add sanitized HTML version
       hasAttachments: hasAttachments,
@@ -352,15 +367,15 @@ async function parseStandardEmail(content, opts) {
 /**
  * Parse Gmail API message format (with payload)
  */
-function parseGmailApiMessage(jsonData, opts) {
-  const log = (...args) => {
+function parseGmailApiMessage(jsonData: GmailApiMessage, opts: EmailParserOptions): EmailData {
+  const log = (...args: any[]): void => {
     if (opts.debug) console.log(...args);
   };
   
   log('Parsing Gmail API message format...');
   
   // Extract headers
-  const headers = {};
+  const headers: Record<string, any> = {};
   if (jsonData.payload && jsonData.payload.headers) {
     jsonData.payload.headers.forEach(h => {
       headers[h.name.toLowerCase()] = h.value;
@@ -386,7 +401,7 @@ function parseGmailApiMessage(jsonData, opts) {
           bodyHtml = sanitizeHtml(decodedBody);
         }
       } catch (e) {
-        log('Failed to decode payload body:', e.message);
+        log('Failed to decode payload body:', (e as Error).message);
       }
     }
     
@@ -403,7 +418,7 @@ function parseGmailApiMessage(jsonData, opts) {
   }
   
   // Create the email data object
-  const emailData = {
+  const emailData: EmailData = {
     id: jsonData.id || `gmail-${Date.now()}`,
     threadId: jsonData.threadId,
     from: {
@@ -417,7 +432,7 @@ function parseGmailApiMessage(jsonData, opts) {
     date: headers.date ? new Date(headers.date) : new Date(),
     body: bodyText,
     bodyHtml: bodyHtml,
-    hasAttachments: hasAttachments(jsonData.payload),
+    hasAttachments: hasAttachmentsInPayload(jsonData.payload),
     attachments: extractGmailAttachments(jsonData.payload, opts),
     headers: headers,
     snippet: jsonData.snippet || createSnippet(bodyText, 100),
@@ -430,8 +445,8 @@ function parseGmailApiMessage(jsonData, opts) {
 /**
  * Parse MSG format using external library or fallback
  */
-async function parseMsgFormat(content, opts) {
-  const log = (...args) => {
+async function parseMsgFormat(content: string | Buffer, opts: EmailParserOptions): Promise<EmailData> {
+  const log = (...args: any[]): void => {
     if (opts.debug) console.log(...args);
   };
   
@@ -443,8 +458,8 @@ async function parseMsgFormat(content, opts) {
     
     // For file path input
     if (typeof content === 'string' && fs.existsSync(content)) {
-      return new Promise((resolve, reject) => {
-        msgParser.parseFile(content, (err, parsed) => {
+      return new Promise<EmailData>((resolve, reject) => {
+        msgParser.parseFile(content, (err: Error, parsed: any) => {
           if (err) {
             log('MSG parsing error:', err);
             reject(err);
@@ -452,19 +467,19 @@ async function parseMsgFormat(content, opts) {
           }
           
           // Convert to our standard format
-          const emailData = {
+          const emailData: EmailData = {
             id: `msg-${Date.now()}`,
             from: {
               name: parsed.from_name || '',
               email: parsed.from_email || ''
             },
-            to: parsed.to.map(r => ({ name: r.name || '', email: r.email || '' })),
-            cc: (parsed.cc || []).map(r => ({ name: r.name || '', email: r.email || '' })),
+            to: parsed.to.map((r: any) => ({ name: r.name || '', email: r.email || '' })),
+            cc: (parsed.cc || []).map((r: any) => ({ name: r.name || '', email: r.email || '' })),
             subject: parsed.subject || '(No Subject)',
-            date: parsed.date,
+            date: parsed.date || new Date(),
             body: parsed.body || '',
             hasAttachments: parsed.attachments && parsed.attachments.length > 0,
-            attachments: (parsed.attachments || []).map(att => ({
+            attachments: (parsed.attachments || []).map((att: any) => ({
               filename: att.fileName || 'attachment',
               contentType: att.contentType,
               size: att.content ? att.content.length : 0,
@@ -483,8 +498,8 @@ async function parseMsgFormat(content, opts) {
     
     // If we have buffer content
     if (Buffer.isBuffer(content)) {
-      return new Promise((resolve, reject) => {
-        msgParser.parseBuffer(content, (err, parsed) => {
+      return new Promise<EmailData>((resolve, reject) => {
+        msgParser.parseBuffer(content, (err: Error, parsed: any) => {
           if (err) {
             log('MSG buffer parsing error:', err);
             reject(err);
@@ -492,19 +507,19 @@ async function parseMsgFormat(content, opts) {
           }
           
           // Convert to our standard format (same as above)
-          const emailData = {
+          const emailData: EmailData = {
             id: `msg-${Date.now()}`,
             from: {
               name: parsed.from_name || '',
               email: parsed.from_email || ''
             },
-            to: parsed.to.map(r => ({ name: r.name || '', email: r.email || '' })),
-            cc: (parsed.cc || []).map(r => ({ name: r.name || '', email: r.email || '' })),
+            to: parsed.to.map((r: any) => ({ name: r.name || '', email: r.email || '' })),
+            cc: (parsed.cc || []).map((r: any) => ({ name: r.name || '', email: r.email || '' })),
             subject: parsed.subject || '(No Subject)',
             date: parsed.date,
             body: parsed.body || '',
             hasAttachments: parsed.attachments && parsed.attachments.length > 0,
-            attachments: (parsed.attachments || []).map(att => ({
+            attachments: (parsed.attachments || []).map((att: any) => ({
               filename: att.fileName || 'attachment',
               contentType: att.contentType,
               size: att.content ? att.content.length : 0,
@@ -522,7 +537,7 @@ async function parseMsgFormat(content, opts) {
     }
   } catch (e) {
     // msg-parser not available or failed
-    log('MSG parser not available:', e.message);
+    log('MSG parser not available:', (e as Error).message);
     
     // Fallback to standard parser as last resort
     return parseStandardEmail(content, opts);
@@ -535,11 +550,7 @@ async function parseMsgFormat(content, opts) {
 /**
  * Extract the first email from an MBOX file
  */
-function extractFirstEmailFromMbox(content) {
-  const log = (...args) => {
-    if (opts && opts.debug) console.log(...args);
-  };
-  
+function extractFirstEmailFromMbox(content: string | Buffer): string | null {
   // Convert buffer to string if needed
   const str = Buffer.isBuffer(content) ? content.toString() : content;
   
@@ -548,17 +559,17 @@ function extractFirstEmailFromMbox(content) {
   const match = str.match(fromMarker);
   
   if (!match) {
-    log('No MBOX format markers found');
+    console.log('No MBOX format markers found');
     return null;
   }
   
   // Find the start of the next message (if any)
-  const startPos = match.index;
+  const startPos = match.index!;
   const nextMatch = str.slice(startPos + 1).match(fromMarker);
   
   if (nextMatch) {
     // Extract just the first email
-    return str.slice(startPos, startPos + 1 + nextMatch.index);
+    return str.slice(startPos, startPos + 1 + nextMatch.index!);
   } else {
     // Only one email in the file
     return str.slice(startPos);
@@ -568,7 +579,7 @@ function extractFirstEmailFromMbox(content) {
 /**
  * Check if content looks like Base64
  */
-function looksLikeBase64(str) {
+function looksLikeBase64(str: string): boolean {
   // Base64 strings are typically long and contain only these characters
   if (str.length < 50) return false;
   
@@ -579,7 +590,7 @@ function looksLikeBase64(str) {
 /**
  * Detect character encoding from buffer
  */
-function detectEncoding(buffer) {
+function detectEncoding(buffer: Buffer): string {
   // Simple encoding detection - check for common encoding signatures
   if (buffer.length > 3) {
     // UTF-8 BOM
@@ -603,7 +614,7 @@ function detectEncoding(buffer) {
 /**
  * Check if content has MSG file signature
  */
-function hasMsgSignature(content) {
+function hasMsgSignature(content: any): boolean {
   // MSG files start with the signature D0 CF 11 E0
   if (Buffer.isBuffer(content) && content.length > 4) {
     return content[0] === 0xD0 && 
@@ -617,7 +628,7 @@ function hasMsgSignature(content) {
 /**
  * Check if content has MBOX signature
  */
-function hasMboxSignature(content) {
+function hasMboxSignature(content: string | Buffer): boolean {
   // MBOX files typically start with "From " followed by an email address
   if (typeof content === 'string') {
     return content.trimStart().startsWith('From ');
@@ -632,7 +643,7 @@ function hasMboxSignature(content) {
 /**
  * Check if an object looks like an already parsed email
  */
-function hasEmailFields(obj) {
+function hasEmailFields(obj: any): boolean {
   // Check for common email fields
   return obj && 
          (obj.subject !== undefined || obj.from !== undefined) &&
@@ -642,9 +653,9 @@ function hasEmailFields(obj) {
 /**
  * Normalize an already parsed email object to our format
  */
-function normalizeEmailObject(obj, opts) {
+function normalizeEmailObject(obj: any, opts: EmailParserOptions): EmailData {
   // Set up normalized object with our expected fields
-  const normalized = {
+  const normalized: EmailData = {
     id: obj.id || obj.messageId || `email-${Date.now()}`,
     from: obj.from,
     to: obj.to || [],
@@ -671,10 +682,10 @@ function normalizeEmailObject(obj, opts) {
   
   // Normalize to/cc/bcc fields if needed
   ['to', 'cc', 'bcc'].forEach(field => {
-    if (typeof normalized[field] === 'string') {
-      normalized[field] = parseRecipientsFromHeader(normalized[field]);
-    } else if (!Array.isArray(normalized[field])) {
-      normalized[field] = [];
+    if (typeof normalized[field as keyof EmailData] === 'string') {
+      (normalized as any)[field] = parseRecipientsFromHeader(normalized[field as keyof EmailData] as string);
+    } else if (!Array.isArray(normalized[field as keyof EmailData])) {
+      (normalized as any)[field] = [];
     }
   });
   
@@ -684,7 +695,7 @@ function normalizeEmailObject(obj, opts) {
 /**
  * Extract body content from Gmail API parts
  */
-function extractBodyFromParts(parts) {
+function extractBodyFromParts(parts: any[]): BodyContent {
   if (!parts || !Array.isArray(parts)) return { text: '', html: '' };
   
   let textPart = '';
@@ -696,13 +707,13 @@ function extractBodyFromParts(parts) {
       try {
         textPart = Buffer.from(part.body.data, 'base64').toString();
       } catch (e) {
-        console.log('Error decoding text part:', e.message);
+        console.log('Error decoding text part:', (e as Error).message);
       }
     } else if (part.mimeType === 'text/html' && part.body && part.body.data) {
       try {
         htmlPart = Buffer.from(part.body.data, 'base64').toString();
       } catch (e) {
-        console.log('Error decoding HTML part:', e.message);
+        console.log('Error decoding HTML part:', (e as Error).message);
       }
     }
     
@@ -732,7 +743,7 @@ function extractBodyFromParts(parts) {
 /**
  * Extract the sender information
  */
-function extractSender(from) {
+function extractSender(from: any): Recipient {
   if (!from) {
     return { name: '', email: '' };
   }
@@ -773,13 +784,13 @@ function extractSender(from) {
 /**
  * Extract recipients information
  */
-function extractRecipients(recipients) {
+function extractRecipients(recipients: any): Recipient[] {
   if (!recipients) {
     return [];
   }
   
   if (recipients.value && Array.isArray(recipients.value)) {
-    return recipients.value.map(r => ({
+    return recipients.value.map((r: any) => ({
       name: r.name || '',
       email: r.address || ''
     }));
@@ -787,7 +798,7 @@ function extractRecipients(recipients) {
   
   if (recipients.text) {
     // Split by commas if multiple recipients
-    return recipients.text.split(',').map(addr => {
+    return recipients.text.split(',').map((addr: string) => {
       addr = addr.trim();
       const matches = addr.match(/([^<]+)<([^>]+)>/);
       if (matches) {
@@ -802,7 +813,7 @@ function extractRecipients(recipients) {
   
   if (typeof recipients === 'string') {
     // Try to parse comma-separated string
-    return recipients.split(',').map(addr => {
+    return recipients.split(',').map((addr: string) => {
       addr = addr.trim();
       const matches = addr.match(/<([^>]+)>/);
       if (matches && matches[1]) {
@@ -821,7 +832,7 @@ function extractRecipients(recipients) {
 /**
  * Extract the email body, with special handling for HTML content
  */
-function extractBody(parsedEmail) {
+function extractBody(parsedEmail: ParsedEmail): BodyContent {
   let bodyText = '';
   let bodyHtml = '';
   
@@ -862,7 +873,7 @@ function extractBody(parsedEmail) {
 /**
  * Sanitize HTML to make it safe for display while preserving formatting
  */
-function sanitizeHtml(html) {
+function sanitizeHtml(html: string): string {
   if (!html) return '';
   
   try {
@@ -875,9 +886,9 @@ function sanitizeHtml(html) {
     $('script, iframe, object, embed, form, input, button, style').remove();
     
     // Remove on* event handlers from all elements
-    $('*').each(function() {
+    $('*').each(function(this: cheerio.Element) {
       const el = $(this);
-      const attrs = el[0].attribs;
+      const attrs = el.get(0)?.attribs;
       if (!attrs) return;
       
       Object.keys(attrs).forEach(attr => {
@@ -915,7 +926,7 @@ function sanitizeHtml(html) {
 /**
  * Extract text content from HTML
  */
-function extractTextFromHtml(html) {
+function extractTextFromHtml(html: string): string {
   try {
     const $ = cheerio.load(html, {
       decodeEntities: true,
@@ -933,7 +944,7 @@ function extractTextFromHtml(html) {
     $('.gmail_signature, .signature').remove();
     
     // Remove common footer dividers (without using position)
-    $('hr, .divider').each(function() {
+    $('hr, .divider').each(function(this: cheerio.Element) {
       // Instead of using position, check if this is near the bottom by seeing if there's
       // a limited amount of content after this element
       const elementsAfter = $(this).nextAll().length;
@@ -944,7 +955,7 @@ function extractTextFromHtml(html) {
     });
     
     // Process links to preserve important information
-    $('a').each(function() {
+    $('a').each(function(this: cheerio.Element) {
       const href = $(this).attr('href');
       const text = $(this).text().trim();
       
@@ -956,7 +967,7 @@ function extractTextFromHtml(html) {
         $(this).replaceWith(text);
       } else if (!text || text === href) {
         // If the link text is empty or the URL, just use the URL
-        $(this).replaceWith(href);
+        $(this).replaceWith(href || '');
       }
       // Otherwise keep the link text as is
     });
@@ -965,7 +976,7 @@ function extractTextFromHtml(html) {
     let text = '';
     
     // Start by processing headings - they should stand out
-    $('h1, h2, h3, h4, h5, h6').each(function() {
+    $('h1, h2, h3, h4, h5, h6').each(function(this: cheerio.Element) {
       const content = $(this).text().trim();
       if (content) {
         text += content + '\n\n';
@@ -973,7 +984,7 @@ function extractTextFromHtml(html) {
     });
     
     // Process paragraphs and divs that look like paragraphs
-    $('p, div:not(:has(div))').each(function() {
+    $('p, div:not(:has(div))').each(function(this: cheerio.Element) {
       // Skip if this is nested within something we already processed
       if ($(this).parents('p, h1, h2, h3, h4, h5, h6').length) {
         return;
@@ -986,8 +997,8 @@ function extractTextFromHtml(html) {
     });
     
     // Process lists with proper formatting
-    $('ul, ol').each(function() {
-      $(this).find('li').each(function(i) {
+    $('ul, ol').each(function(this: cheerio.Element) {
+      $(this).find('li').each(function(this: cheerio.Element, i: number) {
         const content = $(this).text().trim();
         if (content) {
           // For ordered lists, use numbers, for unordered use bullets
@@ -999,10 +1010,10 @@ function extractTextFromHtml(html) {
     });
     
     // Process table data
-    $('table').each(function() {
-      $(this).find('tr').each(function() {
-        const rowContent = [];
-        $(this).find('td, th').each(function() {
+    $('table').each(function(this: cheerio.Element) {
+      $(this).find('tr').each(function(this: cheerio.Element) {
+        const rowContent: string[] = [];
+        $(this).find('td, th').each(function(this: cheerio.Element) {
           rowContent.push($(this).text().trim());
         });
         if (rowContent.length) {
@@ -1028,7 +1039,7 @@ function extractTextFromHtml(html) {
 /**
  * Clean up the body text
  */
-function cleanBodyText(text) {
+function cleanBodyText(text: string): string {
   if (!text) return '';
   
   // Remove email client quoted text markers
@@ -1073,14 +1084,14 @@ function cleanBodyText(text) {
 /**
  * Extract email attachments with special handling for linked attachments
  */
-function extractAttachments(parsedEmail, opts) {
-  const log = (...args) => {
+function extractAttachments(parsedEmail: ParsedEmail, opts: EmailParserOptions): Attachment[] {
+  const log = (...args: any[]): void => {
     if (opts && opts.debug) console.log(...args);
   };
   
-  const attachments = [];
-  const seenUrls = new Set();
-  const iconUrls = new Map(); // Map to track icon URLs and their corresponding attachment indices
+  const attachments: Attachment[] = [];
+  const seenUrls = new Set<string>();
+  const iconUrls = new Map<string, number[]>(); // Map to track icon URLs and their corresponding attachment indices
   
   // Define patterns to identify icon-like attachments
   const iconPatterns = [
@@ -1093,7 +1104,7 @@ function extractAttachments(parsedEmail, opts) {
   ];
 
   // Function to determine if an attachment is likely just an icon
-  function isLikelyIcon(filename, size, contentType, url) {
+  function isLikelyIcon(filename?: string, size?: number, contentType?: string, url?: string): boolean {
     // If the URL contains paths that are known to host icons
     if (url) {
       const iconHosts = [
@@ -1188,7 +1199,7 @@ function extractAttachments(parsedEmail, opts) {
         isStandard: true,
         isLikelyIcon: isIcon,
         content: (opts && opts.includeAttachmentContent && att.content) ? 
-                att.content.toString('base64') : undefined
+                Buffer.isBuffer(att.content) ? att.content.toString('base64') : att.content : undefined
       });
     }
   }
@@ -1228,7 +1239,7 @@ function extractAttachments(parsedEmail, opts) {
         if (isFileLink) {
           log(`Found linked attachment: ${linkText || href}`);
           const iconImg = $(elem).find('img');
-          const iconSrc = iconImg.length ? iconImg.attr('src') : null;
+          const iconSrc = iconImg.length ? iconImg.attr('src') : undefined;
           
           // Clean up the filename - remove line breaks and extra spaces
           let filename = linkText || path.basename(href).split('?')[0];
@@ -1240,14 +1251,14 @@ function extractAttachments(parsedEmail, opts) {
             if (!iconUrls.has(iconSrc)) {
               iconUrls.set(iconSrc, []);
             }
-            iconUrls.get(iconSrc).push(attachmentIndex);
+            iconUrls.get(iconSrc)!.push(attachmentIndex);
           }
           
           // The linked file itself is NOT an icon - it's a real attachment
           attachments.push({
             filename: filename,
             url: href,
-            type: determineFileType(filename, null, iconSrc),
+            type: determineFileType(filename, undefined, iconSrc),
             iconUrl: iconSrc,
             isLink: true,
             isLikelyIcon: false // Linked files are not icons
@@ -1270,7 +1281,7 @@ function extractAttachments(parsedEmail, opts) {
         if (src.startsWith('cid:')) return;
         
         // Determine if this image is likely just an icon
-        const isIcon = isLikelyIcon(path.basename(src), null, 'image', src);
+        const isIcon = isLikelyIcon(path.basename(src), undefined, 'image', src);
         
         // This is likely an embedded image from an external source
         log(`Found embedded image: ${src}${isIcon ? ' (likely an icon)' : ''}`);
@@ -1316,7 +1327,7 @@ function extractAttachments(parsedEmail, opts) {
           if (!attachments[j].isIconFor) {
             attachments[j].isIconFor = [];
           }
-          attachments[j].isIconFor.push(i);
+          attachments[j].isIconFor?.push(i);
           
           break;
         }
@@ -1345,10 +1356,10 @@ function extractAttachments(parsedEmail, opts) {
 /**
  * Extract attachments from Gmail API message
  */
-function extractGmailAttachments(payload, opts) {
-  const attachments = [];
+function extractGmailAttachments(payload: any, opts: EmailParserOptions): Attachment[] {
+  const attachments: Attachment[] = [];
   
-  function processPayloadParts(parts) {
+  function processPayloadParts(parts: any[]): void {
     if (!parts || !Array.isArray(parts)) return;
     
     for (const part of parts) {
@@ -1388,7 +1399,7 @@ function extractGmailAttachments(payload, opts) {
 /**
  * Clean up filename - remove line breaks and extra spaces
  */
-function cleanFilename(filename) {
+function cleanFilename(filename?: string): string {
   if (!filename) return 'attachment';
   
   return filename.replace(/\s+/g, ' ').trim();
@@ -1397,7 +1408,7 @@ function cleanFilename(filename) {
 /**
  * Determine file type from name, content type, or icon
  */
-function determineFileType(filename, contentType, iconUrl) {
+function determineFileType(filename?: string, contentType?: string, iconUrl?: string): string {
   // Check content type first
   if (contentType) {
     if (contentType.includes('pdf')) return 'pdf';
@@ -1449,7 +1460,7 @@ function determineFileType(filename, contentType, iconUrl) {
 /**
  * Extract thread ID from email
  */
-function extractThreadId(parsedEmail) {
+function extractThreadId(parsedEmail: ParsedEmail): string {
   // Try gmail thread ID first
   if (parsedEmail.headers && parsedEmail.headers.get('x-gmail-thread-id')) {
     return parsedEmail.headers.get('x-gmail-thread-id');
@@ -1476,10 +1487,10 @@ function extractThreadId(parsedEmail) {
 /**
  * Extract important headers from email
  */
-function extractImportantHeaders(headers) {
+function extractImportantHeaders(headers: any): Record<string, any> {
   if (!headers) return {};
   
-  const important = {};
+  const important: Record<string, any> = {};
   const headersToExtract = [
     'message-id', 'thread-index', 'x-gmail-thread-id', 'in-reply-to',
     'references', 'importance', 'priority', 'x-priority', 'x-msmail-priority',
@@ -1499,7 +1510,7 @@ function extractImportantHeaders(headers) {
 /**
  * Helper to check if Gmail message has attachments
  */
-function hasAttachments(payload) {
+function hasAttachmentsInPayload(payload: any): boolean {
   if (!payload) return false;
   
   // Check for filename in the payload
@@ -1515,7 +1526,7 @@ function hasAttachments(payload) {
       }
       
       // Recursive check
-      if (part.parts && hasAttachments(part)) {
+      if (part.parts && hasAttachmentsInPayload(part)) {
         return true;
       }
     }
@@ -1527,7 +1538,7 @@ function hasAttachments(payload) {
 /**
  * Extract name from email header
  */
-function extractNameFromHeader(header) {
+function extractNameFromHeader(header?: string): string {
   if (!header) return '';
   
   const match = header.match(/^([^<]+)</);
@@ -1541,7 +1552,7 @@ function extractNameFromHeader(header) {
 /**
  * Extract email from header
  */
-function extractEmailFromHeader(header) {
+function extractEmailFromHeader(header?: string): string {
   if (!header) return '';
   
   const match = header.match(/<([^>]+)>/);
@@ -1555,7 +1566,7 @@ function extractEmailFromHeader(header) {
 /**
  * Parse recipients from header
  */
-function parseRecipientsFromHeader(header) {
+function parseRecipientsFromHeader(header?: string): Recipient[] {
   if (!header) return [];
   
   return header.split(',').map(addr => {
@@ -1573,7 +1584,7 @@ function parseRecipientsFromHeader(header) {
 /**
  * Create a clean snippet from the body
  */
-function createSnippet(body, maxLength = 100) {
+function createSnippet(body?: string, maxLength = 100): string {
   if (!body) return '';
   
   // Convert newlines to spaces and remove extra whitespace
@@ -1590,7 +1601,7 @@ function createSnippet(body, maxLength = 100) {
 /**
  * Extract and analyze subject line information
  */
-function extractSubjectInfo(subject) {
+function extractSubjectInfo(subject?: string): SubjectInfo {
   if (!subject) {
     return {
       raw: '(No Subject)',
@@ -1607,7 +1618,7 @@ function extractSubjectInfo(subject) {
   const otherPrefixes = [/^[[(].*[\])]:/i]; // Matches things like [External]:, [SPAM]:, etc.
   
   // Initialize result
-  const result = {
+  const result: SubjectInfo = {
     raw: subject,
     clean: subject,
     hasReply: false,
@@ -1670,12 +1681,12 @@ function extractSubjectInfo(subject) {
 }
 
 // Process a single email file
-async function processEmailFile(filePath, outputPath = null, options = {}) {
+async function processEmailFile(filePath: string, outputPath: string | null = null, options: EmailParserOptions = {}): Promise<EmailData> {
   console.log(`\nProcessing email file: ${filePath}`);
   
   try {
     // Ensure options has outputPath set
-    const emailOptions = {
+    const emailOptions: EmailParserOptions = {
       ...options,
       outputPath
     };
@@ -1704,7 +1715,7 @@ async function processEmailFile(filePath, outputPath = null, options = {}) {
         fs.writeFileSync(outputPath, JSON.stringify(emailData, null, 2));
         console.log(`Wrote output to ${outputPath}`);
       } catch (err) {
-        console.error(`Error writing output file: ${err.message}`);
+        console.error(`Error writing output file: ${(err as Error).message}`);
       }
     }
     
@@ -1718,12 +1729,12 @@ async function processEmailFile(filePath, outputPath = null, options = {}) {
 /**
  * Process JSON email data directly without requiring file operations
  * This function can be used by external applications to directly process API responses
- * @param {Object} jsonData - The raw JSON data from an API response
- * @param {Object} options - Processing options
- * @returns {Promise<Object>} Parsed email data
+ * @param jsonData - The raw JSON data from an API response
+ * @param options - Processing options
+ * @returns Parsed email data
  */
-async function processEmailJson(jsonData, options = {}) {
-  const opts = {
+async function processEmailJson(jsonData: any, options: EmailParserOptions = {}): Promise<EmailData> {
+  const opts: EmailParserOptions = {
     debug: false,
     outputPath: null,
     includeAttachmentContent: false,
@@ -1731,7 +1742,7 @@ async function processEmailJson(jsonData, options = {}) {
     ...options
   };
   
-  const log = (...args) => {
+  const log = (...args: any[]): void => {
     if (opts.debug) console.log(...args);
   };
   
@@ -1755,7 +1766,7 @@ async function processEmailJson(jsonData, options = {}) {
 }
 
 // Command-line interface
-async function main() {
+async function main(): Promise<void> {
   const args = process.argv.slice(2);
   
   if (args.length === 0) {
@@ -1774,9 +1785,9 @@ async function main() {
   let debugMode = false;
   let includeContent = false;
   let inputFile = '';
-  let outputFile = null;
+  let outputFile: string | null = null;
   let jsonMode = false;
-  let jsonData = null;
+  let jsonData: any = null;
   
   // Process command-line arguments
   for (let i = 0; i < args.length; i++) {
@@ -1792,7 +1803,7 @@ async function main() {
           jsonData = JSON.parse(args[i + 1]);
           i++; // Skip the next argument as it's the JSON string
         } catch (e) {
-          console.error(`Error parsing JSON input: ${e.message}`);
+          console.error(`Error parsing JSON input: ${(e as Error).message}`);
           process.exit(1);
         }
       } else {
@@ -1806,7 +1817,7 @@ async function main() {
     }
   }
   
-  const options = {
+  const options: EmailParserOptions = {
     debug: debugMode,
     includeAttachmentContent: includeContent,
     outputPath: outputFile
@@ -1816,7 +1827,7 @@ async function main() {
   console.log(`Output file: ${outputFile || 'None specified'}`);
   
   try {
-    let result;
+    let result: EmailData | undefined;
     
     if (jsonMode && jsonData) {
       console.log('Processing JSON data directly...');
@@ -1860,12 +1871,15 @@ async function main() {
 
 // Run if called directly
 if (require.main === module) {
-  main();
+  main().catch(err => {
+    console.error('Unhandled error:', err);
+    process.exit(1);
+  });
 }
 
 // Export for use in other modules
-module.exports = {
+export {
   parseAnyEmail,
   processEmailFile,
   processEmailJson
-};
+}; 

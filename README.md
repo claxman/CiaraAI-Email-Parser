@@ -55,41 +55,41 @@ Required dependencies:
 ### Basic Usage
 
 ```bash
-node email-parser.js <input-file> [output-file]
+node dist/email-parser.js <input-file> [output-file]
 ```
 
 ### With Debug Information
 
 ```bash
-node email-parser.js --debug <input-file> [output-file]
+node dist/email-parser.js --debug <input-file> [output-file]
 ```
 
 ### Process JSON Directly
 
 ```bash
-node email-parser.js --json '{"raw":"base64-encoded-content"}' [output-file]
+node dist/email-parser.js --json '{"raw":"base64-encoded-content"}' [output-file]
 ```
 
 ### Include Attachment Content
 
 ```bash
-node email-parser.js --content <input-file> [output-file]
+node dist/email-parser.js --content <input-file> [output-file]
 ```
 
 ### Examples
 
 ```bash
 # Parse an EML file
-node email-parser.js email.eml parsed_email.json
+node dist/email-parser.js email.eml parsed_email.json
 
 # Parse a Gmail API JSON file with debug information
-node email-parser.js --debug gmail_message.json parsed_email.json
+node dist/email-parser.js --debug gmail_message.json parsed_email.json
 
 # Parse directly from a Gmail API response
-node email-parser.js --json "$(cat gmail_response.json)" parsed_email.json
+node dist/email-parser.js --json "$(cat gmail_response.json)" parsed_email.json
 
 # Parse an MBOX file with attachment content included
-node email-parser.js --content --debug mailbox.mbox parsed_email.json
+node dist/email-parser.js --content --debug mailbox.mbox parsed_email.json
 ```
 
 ## Programmatic Usage
@@ -258,3 +258,55 @@ MIT
 - Improved attachment detection
 - Added support for more file types
 - Enhanced HTML sanitization 
+
+## TypeScript Support
+
+The email parser is now fully written in TypeScript, providing type safety and better developer experience. The TypeScript version is available in the `src` directory, with compiled JavaScript output in `dist`.
+
+### Building TypeScript Code
+
+```bash
+# Install dependencies
+npm install
+
+# Build the TypeScript code
+npm run build
+
+# Watch mode for development
+npm run dev
+```
+
+### Using TypeScript Version
+
+The TypeScript version maintains all the functionality of the original JavaScript version but adds type definitions and interfaces. Here's how to use it:
+
+```typescript
+import { parseAnyEmail, processEmailFile, processEmailJson } from './dist/email-parser';
+import type { EmailData, EmailParserOptions } from './dist/types';
+
+// Parse an email file
+async function parseEmail() {
+  const options: EmailParserOptions = {
+    debug: true,
+    outputPath: 'output.json'
+  };
+  
+  const emailData: EmailData = await processEmailFile('messageraw.json', 'output.json', options);
+  console.log(`Email has attachments: ${emailData.hasAttachments}`);
+}
+
+// Process JSON data directly
+async function processJson() {
+  const jsonData = JSON.parse(fs.readFileSync('messageraw.json', 'utf8'));
+  const emailData = await processEmailJson(jsonData, { debug: true });
+  console.log(`Found ${emailData.attachments.length} attachments`);
+}
+
+// Run from the command line
+// The TypeScript version works exactly the same as the JavaScript version:
+// node dist/email-parser.js --debug messageraw.json output.json
+```
+
+### Type Definitions
+
+The TypeScript version includes comprehensive type definitions for all functions and data structures, making it easier to understand the code and catch potential issues during development. 
